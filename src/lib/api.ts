@@ -28,6 +28,7 @@ export async function authApi<T = void>(route: string, body?: unknown, accessTok
       headers: { "content-type": "application/json", ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}) },
       body: route === "me" ? undefined : JSON.stringify(body ?? {}),
       cache: "no-store",
+      signal: route === "refresh" ? AbortSignal.timeout(20_000) : undefined,
     });
   } catch {
     throw new ApiError("Could not reach the server. Check your connection and try again.", 0);

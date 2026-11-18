@@ -28,21 +28,42 @@
   padding-bottom: 16px;
 }
 
-.rotated .transport :global(button) {
-  width: 48px;
-  height: 48px;
+.controlRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
 }
-
-.rotated .transport :global(button[aria-label="Play"]),
-.rotated .transport :global(button[aria-label="Pause"]) {
-  width: 68px;
-  height: 68px;
+.controlRow :global(.player-volume) {
+  position: relative;
+  flex-direction: row;
 }
-
-.rotated .transport :global(button[aria-label="Play"] svg),
-.rotated .transport :global(button[aria-label="Pause"] svg) {
-  width: 44px;
-  height: 44px;
+.time {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / .85);
+  padding: 0 8px;
+}
+@media (max-width: 600px) {
+  .controlRow { gap: 0; }
+  .time { padding: 0 4px; }
+  .duration { display: none; }
+  .controlRow :global(.player-volume-slider) {
+    position: absolute;
+    bottom: 50px;
+    left: 0;
+    border-radius: 10px;
+    background: rgb(0 0 0 / .85);
+  }
+}
+.viewport:has([data-player-toolbar]) :global([data-player-settings]) {
+  top: auto;
+  bottom: calc(max(12px, var(--player-safe-bottom)) + 104px);
+  transform-origin: bottom right;
+}
+.viewport:has([data-player-toolbar]) :global([data-player-settings-content]) {
+  max-height: min(380px, calc(100cqh - 196px));
 }
 
 .rotated .footer {
@@ -60,10 +81,10 @@
 
 .rotated :global([data-player-settings]) {
   inset: auto max(12px, var(--player-safe-right)) max(12px, var(--player-safe-bottom)) auto;
-  width: min(340px, calc(100% - 24px));
+  width: min(304px, calc(100% - 24px));
   transform-origin: bottom right;
 }
 
-.rotated :global([data-player-settings] [role="menu"]) {
-  max-height: calc(100cqh - 96px);
+.rotated :global([data-player-settings-content]) {
+  max-height: calc(100cqh - 156px);
 }

@@ -1,0 +1,63 @@
+.ambient {
+  position: absolute;
+  inset: -18%;
+  z-index: 6;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+  contain: strict;
+  mask-image: radial-gradient(ellipse at center, #000 30%, #000b 65%, #0005 100%);
+}
+
+.motion {
+  position: absolute;
+  inset: -20%;
+}
+
+.motion canvas {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 150ms linear;
+}
+
+.cinematic .motion canvas {
+  animation: ambient-drift 28s ease-in-out infinite alternate;
+  animation-play-state: paused;
+}
+
+.cinematic .motion canvas:last-child {
+  animation-name: ambient-return;
+  animation-duration: 37s;
+}
+
+.cinematic[data-running="true"] .motion canvas {
+  animation-play-state: running;
+}
+
+.thumbnail .motion canvas:first-child {
+  animation-name: thumbnail-breathe;
+  animation-duration: 32s;
+}
+
+.thumbnail .motion canvas:last-child { animation: none; }
+
+@keyframes thumbnail-breathe {
+  from { transform: translate(-1%, -1%) scale(1.08); }
+  to { transform: translate(1%, 1%) scale(1.12); }
+}
+
+@keyframes ambient-drift {
+  from { transform: translate(-3%, -2%) rotate(-5deg) scale(1.12); }
+  to { transform: translate(4%, 3%) rotate(7deg) scale(1.22); }
+}
+
+@keyframes ambient-return {
+  from { transform: translate(5%, -3%) rotate(8deg) scale(1.2); }
+  to { transform: translate(-4%, 4%) rotate(-7deg) scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion canvas { animation: none !important; transition: none; }
+}

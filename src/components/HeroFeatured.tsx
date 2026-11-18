@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PosterItem } from "@/lib/data";
 import { PlayIcon, StarIcon } from "./icons";
 import { PosterArt } from "./PosterArt";
-import { LiquidGlassButton } from "./LiquidGlassSurface";
+import { GlassButton } from "./GlassSurface";
 
 export function HeroFeatured({ items }: { items: PosterItem[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -69,14 +69,14 @@ export function HeroFeatured({ items }: { items: PosterItem[] }) {
               <div className="relative h-full w-full">
                 <PosterArt gradient={item.gradient} title={item.title} textClass={item.textClass} size="xl" />
                 {isActive && (
-                  <LiquidGlassButton
+                  <GlassButton
                     type="button"
                     aria-label={`Play ${item.title}`}
                     wrapperClassName="absolute top-3 left-3"
                     className="flex size-11 items-center justify-center rounded-full"
                   >
                     <PlayIcon className="ml-0.5 h-4 w-4 text-white" />
-                  </LiquidGlassButton>
+                  </GlassButton>
                 )}
               </div>
             </div>

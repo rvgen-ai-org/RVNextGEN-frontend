@@ -1,7 +1,7 @@
 import type { PosterItem } from "@/lib/data";
 import { InfoIcon, PlayIcon, StarIcon } from "./icons";
 import { PosterArt } from "./PosterArt";
-import { LiquidGlassButton } from "./LiquidGlassSurface";
+import { GlassButton } from "./GlassSurface";
 
 export function HeroBanner({ item }: { item: PosterItem }) {
   return (
@@ -30,13 +30,13 @@ export function HeroBanner({ item }: { item: PosterItem }) {
               <PlayIcon className="h-4 w-4" />
               Play
             </button>
-            <LiquidGlassButton
+            <GlassButton
               type="button"
               className="flex min-h-11 items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white"
             >
               <InfoIcon className="h-4 w-4" />
               More Info
-            </LiquidGlassButton>
+            </GlassButton>
           </div>
         </div>
       </div>

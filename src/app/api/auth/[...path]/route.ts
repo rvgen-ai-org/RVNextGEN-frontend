@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { AuthBodyError, readAuthBody } from "@/lib/auth-proxy-body";
 
 /**
  * Same-origin proxy to the RVgen backend's /auth routes. The browser never sees the refresh token:
@@ -34,6 +35,7 @@ async function forward(request: NextRequest, route: string, init: { method: stri
   try {
     return await fetch(`${BACKEND_URL}/api/auth/${route}`, {
       method: init.method, headers, cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
   } catch {
@@ -50,7 +52,8 @@ async function handle(request: NextRequest, { params }: Context, method: "GET" |
 
   let body: Record<string, unknown> | undefined;
   if (method === "POST") {
-    body = await request.json().catch(() => ({}));
+    try { body = await readAuthBody(request); }
+    catch (error) { return NextResponse.json({ message: error instanceof AuthBodyError ? error.message : "Could not read request." }, { status: error instanceof AuthBodyError ? error.status : 400 }); }
     if (route === "refresh" || route === "logout") {
       const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
       if (!refreshToken) {
@@ -71,8 +74,15 @@ async function handle(request: NextRequest, { params }: Context, method: "GET" |
     return response;
   }
 
-  const text = await upstream.text();
-  const data = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+  let data: Record<string, unknown> | null;
+  try {
+    const parsed: unknown = upstream.status === 204 || upstream.status === 205 ? null : await upstream.json();
+    if (parsed !== null && (typeof parsed !== "object" || Array.isArray(parsed))) throw new Error();
+    if (route === "refresh" && parsed === null) throw new Error();
+    data = parsed as Record<string, unknown> | null;
+  } catch {
+    return NextResponse.json({ message: "The server sent an invalid response. Please try again." }, { status: upstream.ok ? 502 : upstream.status });
+  }
   // Hold the refresh token back from the browser; it only travels in the httpOnly cookie.
   const refreshToken = upstream.ok && typeof data?.refreshToken === "string" ? data.refreshToken : null;
   if (data) delete data.refreshToken;

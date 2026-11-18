@@ -1,0 +1,17 @@
+{
+  "delivery": "Next.js Image, WebP quality 80",
+  "assets": [
+    {
+      "file": "distant-desert-soft.webp",
+      "bytes": 358762
+    },
+    {
+      "file": "sky-soft.webp",
+      "bytes": 357650
+    },
+    {
+      "file": "dunes-soft.webp",
+      "bytes": 420002
+    }
+  ]
+}

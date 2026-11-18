@@ -1,6 +1,6 @@
 import { ApiError, messageFrom } from "./api";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type ApiOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -15,9 +15,9 @@ type ApiOptions = {
 };
 
 /**
- * Calls the RVgen backend directly (browser → backend) with the access token as a Bearer header.
- * The backend's CORS allows the frontend origin, and the refresh token never travels here — that
- * stays in the httpOnly cookie owned by the same-origin /api/auth proxy. `path` is relative to /api.
+ * Calls the API with the access token as a Bearer header. An empty NEXT_PUBLIC_API_URL
+ * uses the same-origin Next.js proxy, so forwarded mobile sessions never call the
+ * phone's localhost. The refresh token stays in the auth proxy's httpOnly cookie.
  */
 export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
   const { method = "GET", body, token, deviceId, headers, signal } = opts;

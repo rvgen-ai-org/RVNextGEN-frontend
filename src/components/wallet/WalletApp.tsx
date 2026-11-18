@@ -120,7 +120,7 @@ export default function WalletApp() {
 
   return (
     <div className="min-h-dvh bg-[#100e0c] text-white">
-      <header className="sticky top-0 z-20 border-b border-white/[.07] bg-[#100e0c]/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-white/[.07] bg-[#100e0c]/80 backdrop-blur-none">
         <div className="mx-auto flex h-16 max-w-4xl items-center gap-3 px-4 sm:px-6">
           <Link href="/" aria-label="Back" className="grid size-10 place-items-center rounded-full border border-white/10 bg-white/[.04] text-white/70 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><ArrowLeft className="size-[18px]" /></Link>
           <h1 className="text-[17px] font-semibold tracking-[-.02em]">Wallet</h1>
@@ -213,7 +213,7 @@ export default function WalletApp() {
       </main>
 
       {stripePack && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => !stripePaying && setStripePack(null)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-none sm:items-center sm:p-4" onClick={() => !stripePaying && setStripePack(null)}>
           <div role="dialog" aria-modal="true" aria-label="Pay securely" className="w-full max-w-md rounded-t-[28px] border border-white/10 bg-[#161311] p-5 pb-[max(20px,env(safe-area-inset-bottom))] sm:rounded-[28px] sm:p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between"><h3 className="text-[17px] font-semibold tracking-[-.02em]">Pay {formatMoney(stripePack.pricePaise, stripePack.currency)}</h3><button type="button" aria-label="Close" onClick={() => !stripePaying && setStripePack(null)} className="grid size-9 place-items-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white"><X className="size-[18px]" /></button></div>
             <div id="stripe-payment-element" className="min-h-[120px]" />

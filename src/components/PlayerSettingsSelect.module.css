@@ -1,0 +1,26 @@
+.picker { margin-top: 12px; min-width: 0; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.label { font-size: 14px; font-weight: 500; color: rgb(255 255 255 / .88); }
+.trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  min-height: 44px; min-width: 112px; max-width: 65%; padding: 10px 12px;
+  border: 0; border-radius: 12px; background: rgb(255 255 255 / .07);
+  color: rgb(255 255 255 / .9); text-align: left; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trigger svg, .option svg { width: 18px; height: 18px; flex-shrink: 0; }
+.trigger svg { color: rgb(255 255 255 / .55); }
+.expanded { transform: rotate(180deg); }
+.options { margin-top: 6px; padding: 5px; border-radius: 14px; background: #19191b; box-shadow: 0 6px 16px rgb(0 0 0 / .16); }
+.option {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 44px; padding: 10px 12px; border: 0; border-radius: 9px;
+  background: transparent; color: rgb(255 255 255 / .7); font-size: 13px; text-align: left; cursor: pointer;
+}
+.option[aria-selected="true"] { background: rgb(255 255 255 / .09); color: white; font-weight: 500; }
+.trigger:hover, .option:hover { background: rgb(255 255 255 / .12); color: white; }
+.trigger:focus-visible, .option:focus-visible { outline: 2px solid rgb(255 255 255 / .75); outline-offset: -2px; }
+@media (forced-colors: active) {
+  .trigger, .options { background: Canvas; color: CanvasText; outline: 1px solid ButtonText; }
+  .option[aria-selected="true"] { background: Highlight; color: HighlightText; }
+}

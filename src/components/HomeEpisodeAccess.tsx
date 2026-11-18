@@ -6,14 +6,15 @@ import { createPlayback, type ApiContent, type Playback } from "@/lib/content";
 import { ApiError } from "@/lib/api";
 import { getDeviceId } from "@/lib/device";
 import { useAuth } from "./AuthProvider";
-import EpisodePurchaseSheet from "./EpisodePurchaseSheet";
-import { LiquidGlassButton } from "./LiquidGlassSurface";
+import dynamic from "next/dynamic";
+const EpisodePurchaseSheet = dynamic(() => import("./EpisodePurchaseSheet"), { ssr: false });
+import { GlassButton } from "./GlassSurface";
 import { seriesSlugs as seriesKeys } from "./GyroSeries";
 
 type ViewerEpisode = ApiContent & { playable: boolean };
 
 /** Open published artwork episodes directly when playback confirms access. */
-export default function HomeEpisodeAccess({ seriesIndex, episode, catalog, onReady, onClose }: { seriesIndex: number; episode: number; catalog?: ViewerEpisode[]; onReady: (playback: Playback) => void; onClose: () => void }) {
+export default function HomeEpisodeAccess({ seriesIndex, episode, catalog, onReady, onClose }: { seriesIndex: number; episode: number; catalog?: ViewerEpisode[]; onReady: (playback: Playback, contentId: string) => void; onClose: () => void }) {
   const { accessToken: token } = useAuth();
   const [content, setContent] = useState<ApiContent | null>(null);
   const [error, setError] = useState("");
@@ -34,7 +35,7 @@ export default function HomeEpisodeAccess({ seriesIndex, episode, catalog, onRea
       if (!token) { setContent(item); return; }
       try {
         const playback = await createPlayback(item.id, token, getDeviceId());
-        if (!abort.signal.aborted) onReadyRef.current(playback);
+        if (!abort.signal.aborted) onReadyRef.current(playback, item.id);
       } catch (e) {
         if (abort.signal.aborted) return;
         if (e instanceof ApiError && e.status === 403) setContent(item);
@@ -56,6 +57,6 @@ export default function HomeEpisodeAccess({ seriesIndex, episode, catalog, onRea
     modal.showModal();
     return () => { modal.close(); focus?.focus({ preventScroll: true }); };
   }, [showDialog]);
-  if (content) return <EpisodePurchaseSheet episodeId={content.id} seriesId={content.seriesId} title={content.title} onReady={onReady} onClose={onClose} />;
-  return <dialog ref={dialog} onCancel={e => { e.preventDefault(); onClose(); }} aria-label="Episode availability" className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-sm rounded-3xl border border-white/15 bg-[#191715] p-6 text-white backdrop:bg-black/70"><h2 className="text-xl font-semibold">Episode {String(episode).padStart(2, "0")}</h2><p role={error ? "alert" : "status"} className="my-5 text-sm leading-relaxed text-white/75">{error || "Opening your episode…"}</p><div className="flex gap-3">{error && <button onClick={() => { setError(""); setAttempt(value => value + 1); }} className="min-h-11 rounded-full bg-white px-5 text-sm text-black">Try again</button>}<LiquidGlassButton onClick={onClose} className="min-h-11 rounded-full px-5 text-sm">Back to episodes</LiquidGlassButton></div></dialog>;
+  if (content) return <EpisodePurchaseSheet episodeId={content.id} seriesId={content.seriesId} title={content.title} onReady={playback => onReady(playback, content.id)} onClose={onClose} />;
+  return <dialog ref={dialog} onCancel={e => { e.preventDefault(); onClose(); }} aria-label="Episode availability" className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-sm rounded-3xl border border-white/15 bg-[#191715] p-6 text-white backdrop:bg-black/70"><h2 className="text-xl font-semibold">Episode {String(episode).padStart(2, "0")}</h2><p role={error ? "alert" : "status"} className="my-5 text-sm leading-relaxed text-white/75">{error || "Opening your episode…"}</p><div className="flex gap-3">{error && <button onClick={() => { setError(""); setAttempt(value => value + 1); }} className="min-h-11 rounded-full bg-white px-5 text-sm text-black">Try again</button>}<GlassButton onClick={onClose} className="min-h-11 rounded-full px-5 text-sm">Back to episodes</GlassButton></div></dialog>;
 }

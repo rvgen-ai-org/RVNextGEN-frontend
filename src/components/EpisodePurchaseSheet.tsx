@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, LockKeyhole, X, ArrowRight, ShieldCheck, LoaderCircle } from "lucide-react";
 import { useAuth } from "./AuthProvider";
-import { LiquidGlassButton } from "./LiquidGlassSurface";
+import { GlassButton } from "./GlassSurface";
 import { createPlayback, type Playback } from "@/lib/content";
 import { ApiError } from "@/lib/api";
 import { getDeviceId } from "@/lib/device";
@@ -168,7 +168,7 @@ export default function EpisodePurchaseSheet({ episodeId, seriesId, title, onRea
   const label = choice === "episode" && preview ? (preview.sufficient ? `Unlock · ${formatCredits(preview.priceMinor)}` : "Add credits to unlock") : selected ? `Pay · ${money(selected.pricePaise, selected.currency)}` : "Continue";
   return <dialog ref={dialog} aria-labelledby="episode-purchase-title" onCancel={event => { event.preventDefault(); callbacks.current.onClose(); }} className="fixed inset-x-0 top-auto bottom-0 m-0 max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-[28px] border border-white/15 bg-[#191715] p-0 text-[#faf7f2] shadow-2xl backdrop:bg-black/70 sm:inset-0 sm:m-auto sm:max-h-[90dvh] sm:w-[480px] sm:rounded-[28px]">
     <div className="p-6 pb-[max(24px,env(safe-area-inset-bottom))] sm:p-8">
-      <div className="mb-6 flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-medium tracking-widest text-[#d7b38c]"><LockKeyhole size={15} /> RVNEXT GEN · PREMIUM</span><LiquidGlassButton aria-label="Close purchase" onClick={() => callbacks.current.onClose()} className="grid size-11 place-items-center rounded-full"><X size={19} /></LiquidGlassButton></div>
+      <div className="mb-6 flex items-center justify-between"><span className="flex items-center gap-2 text-xs font-medium tracking-widest text-[#d7b38c]"><LockKeyhole size={15} /> RVNEXT GEN · PREMIUM</span><GlassButton aria-label="Close purchase" onClick={() => callbacks.current.onClose()} className="grid size-11 place-items-center rounded-full"><X size={19} /></GlassButton></div>
       <h2 id="episode-purchase-title" className="text-2xl font-semibold tracking-tight">Your next story awaits.</h2>
       <p className="mt-2 text-base leading-relaxed text-[#c8c2bc]">{title}</p>
       <div className="mt-6 space-y-3">

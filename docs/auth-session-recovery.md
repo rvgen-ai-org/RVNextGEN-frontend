@@ -1,0 +1,11 @@
+# Session recovery
+
+Temporary refresh failures (network, server recompilation, throttling, malformed responses) keep the existing session and retry after 1, 2, 4, 8, 16 and at most 30 seconds. Initial restoration shows a reconnect screen instead of redirecting to login. Online/visible events also retry. A confirmed missing/invalid session still signs out. Protected APIs continue to verify access tokens normally.
+
+One module-scoped in-flight refresh deduplicates calls, including Strict Mode effects; Web Locks serialize refreshes across supported tabs. A request ID invalidated on unmount, sign-in and sign-out prevents stale completions from overwriting new logins or undoing logout. Tokens remain in memory and HTTP-only cookies, without localStorage persistence. A refresh request times out after 20 seconds.
+
+The backend permits recovery of only the immediately previous refresh token for 30 seconds after rotation. A domain-separated HMAC derives the same replacement across server instances using the existing access signing secret, while the database stores only its hash. Current-token reuse inside that window does not extend it or the database session expiry. Compare-and-swap still controls rotation. Expired/revoked/deleted-user sessions and tokens outside the recovery window are rejected. Logout also accepts the immediate predecessor within this window.
+
+This deliberately permits a bounded 30-second predecessor replay window to recover interrupted responses; it does not recover a lost replacement after a longer outage. All backend instances must use the same signing secret and synchronized clocks. No schema changes or migration are needed. Already-invalid cookies cannot be restored; those users must sign in once.
+
+Checks: isolated backend refresh tests cover concurrent rotation, cross-instance recovery, strict window expiry, invalid/revoked/expired/deleted sessions, older generations and logout. Browser tests exercise the actual AuthProvider under Strict Mode with temporary failures, burst requests, reconnect events, null sessions, stale login/logout races and malformed responses. Live database integration tests were updated for the bounded replay behavior but not run against the configured database. No build command was run.

@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { getStreamPlayer } from "./cloudflare-player";
 
 export type AnalyticsType = "VIEW" | "PLAY" | "COMPLETE" | "SIGNUP" | "SUBSCRIPTION" | "GENERATION";
 type Props = Record<string, string | number | boolean | null>;
@@ -43,33 +44,43 @@ export function watchBeacon(contentId: string, eventType: "START" | "PROGRESS" |
   void apiFetch(`content/${contentId}/watch`, { method: "POST", token, body: { eventType, progressSec: opts.progressSec, durationSec: opts.durationSec, sessionId: sessionId() } }).catch(() => {});
 }
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const s = document.createElement("script"); s.src = src; s.async = true; s.onload = () => resolve(); s.onerror = () => reject(new Error("sdk load failed"));
-    document.body.appendChild(s);
-  });
-}
+/** Native HLS playback keeps the same watch events as the embedded player. */
+type WatchToken = string | null | (() => string | null);
+const watchToken = (token: WatchToken) => typeof token === "function" ? token() : token;
 
-type StreamPlayer = { currentTime: number; duration: number; addEventListener: (e: string, cb: () => void) => void };
-declare global { interface Window { Stream?: (iframe: HTMLIFrameElement) => StreamPlayer } }
+export function attachVideoTelemetry(video: HTMLVideoElement, contentId: string, token: WatchToken): () => void {
+  let started = false;
+  const snapshot = () => ({ progressSec: Math.round(video.currentTime) || 0, durationSec: Number.isFinite(video.duration) ? Math.round(video.duration) : undefined });
+  const play = () => { const currentToken = watchToken(token); if (!started && currentToken) { started = true; trackEvent("PLAY", { contentId }, currentToken); watchBeacon(contentId, "START", currentToken, snapshot()); } };
+  const ended = () => { if (started) watchBeacon(contentId, "COMPLETE", watchToken(token), snapshot()); };
+  video.addEventListener("playing", play);
+  video.addEventListener("ended", ended);
+  const timer = window.setInterval(() => { if (started && !video.paused && !video.seeking && !document.hidden && video.readyState >= 3) watchBeacon(contentId, "PROGRESS", watchToken(token), snapshot()); }, 15000);
+  return () => { clearInterval(timer); video.removeEventListener("playing", play); video.removeEventListener("ended", ended); };
+}
 
 /**
  * Attach watch telemetry to a Cloudflare Stream iframe: START on play, PROGRESS every ~15s
  * (with position + duration, so drop-off is known), COMPLETE on ended. Returns a cleanup fn.
  * Best-effort: silently no-ops if the Stream SDK can't load.
  */
-export function attachStreamTelemetry(iframe: HTMLIFrameElement, contentId: string, token: string | null): () => void {
+export function attachStreamTelemetry(iframe: HTMLIFrameElement, contentId: string, token: WatchToken): () => void {
   let timer: number | undefined;
   let started = false;
   let cancelled = false;
-  loadScript("https://embed.cloudflarestream.com/embed/sdk.latest.js").then(() => {
-    if (cancelled || !window.Stream) return;
-    const player = window.Stream(iframe);
+  let removeListeners: (() => void) | undefined;
+  getStreamPlayer(iframe).then(player => {
+    if (cancelled) return;
     const snapshot = () => ({ progressSec: Math.round(player.currentTime) || 0, durationSec: Math.round(player.duration) || undefined });
-    player.addEventListener("play", () => { if (!started) { started = true; trackEvent('PLAY', { contentId }, token); watchBeacon(contentId, "START", token, snapshot()); } });
-    player.addEventListener("ended", () => watchBeacon(contentId, "COMPLETE", token, snapshot()));
-    timer = window.setInterval(() => { if (started) watchBeacon(contentId, "PROGRESS", token, snapshot()); }, 15000);
+    const onPlay = () => { const currentToken = watchToken(token); if (!started && currentToken) { started = true; trackEvent('PLAY', { contentId }, currentToken); watchBeacon(contentId, "START", currentToken, snapshot()); } };
+    const onEnded = () => { if (started) watchBeacon(contentId, "COMPLETE", watchToken(token), snapshot()); };
+    const onTime = () => { if (!player.paused) onPlay(); };
+    player.addEventListener("play", onPlay);
+    player.addEventListener("playing", onPlay);
+    player.addEventListener("timeupdate", onTime);
+    player.addEventListener("ended", onEnded);
+    removeListeners = () => { player.removeEventListener("play", onPlay); player.removeEventListener("playing", onPlay); player.removeEventListener("timeupdate", onTime); player.removeEventListener("ended", onEnded); };
+    timer = window.setInterval(() => { if (started && !player.paused && !document.hidden) watchBeacon(contentId, "PROGRESS", watchToken(token), snapshot()); }, 15000);
   }).catch(() => {});
-  return () => { cancelled = true; if (timer) window.clearInterval(timer); };
+  return () => { cancelled = true; if (timer) window.clearInterval(timer); removeListeners?.(); };
 }
