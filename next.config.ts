@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: process.env.NODE_ENV === "development"
-    ? (process.env.DEV_ORIGINS ?? "").split(",").map(origin => origin.trim()).filter(Boolean)
-    : [],
   images: { qualities: [75, 80], formats: ["image/webp"] },
   experimental: { proxyTimeout: 120_000, proxyClientMaxBodySize: "10mb" },
   async rewrites() {
