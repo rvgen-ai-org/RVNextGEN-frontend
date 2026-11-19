@@ -15,6 +15,7 @@ export type EpisodeSelection = { episode: number; origin: HTMLElement };
 
 type FullscreenDocument = Document & { webkitFullscreenEnabled?: boolean; webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
 type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+type NativeFullscreenVideo = HTMLVideoElement & { webkitEnterFullscreen?: () => void; webkitExitFullscreen?: () => void; webkitDisplayingFullscreen?: boolean };
 const fullscreenElement = () => (document as FullscreenDocument).fullscreenElement ?? (document as FullscreenDocument).webkitFullscreenElement ?? null;
 const fullscreenAvailable = () => typeof document !== "undefined" && Boolean(document.fullscreenEnabled || (document as FullscreenDocument).webkitFullscreenEnabled);
 const exitFullscreen = async () => {
@@ -94,11 +95,15 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
   const [chrome, setChrome] = useState(true);
   const [activity, setActivity] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
+  const [nativeFullscreen, setNativeFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState("");
   const [fullscreenSupported] = useState(fullscreenAvailable);
+  // iPhone exposes fullscreen through the video's own player, not the page.
+  const nativeYouTube = Boolean(videoId && !fullscreenSupported);
   const [landscapeMode, setLandscapeMode] = useState(false);
   const portrait = useSyncExternalStore(subscribeToOrientation, isPortrait, () => false);
-  const rotatedLandscape = landscapeMode && portrait;
-  const fullscreenActive = fullscreen || landscapeMode;
+  const rotatedLandscape = fullscreen && landscapeMode && portrait;
+  const fullscreenActive = fullscreen || nativeFullscreen;
   const fullscreenRequest = useRef(0);
   const [brightness, setBrightness] = useState(() => {
     try { const saved = Number(localStorage.getItem(BRIGHTNESS_KEY)); return saved >= 50 && saved <= 150 ? saved : 100; } catch { return 100; }
@@ -149,11 +154,14 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
         width: "100%",
         height: "100%",
         videoId,
-        playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, playsinline: 1, rel: 0, cc_load_policy: 0, enablejsapi: 1, origin: window.location.origin },
+        playerVars: { autoplay: 0, controls: nativeYouTube ? 1 : 0, disablekb: 1, fs: 1, playsinline: 1, rel: 0, cc_load_policy: 0, enablejsapi: 1, origin: window.location.origin },
         events: {
           onReady: (event: { target: YouTubePlayer }) => {
             if (!live) return;
             player.current = event.target;
+            const iframe = host.querySelector("iframe");
+            iframe?.setAttribute("allowfullscreen", "");
+            iframe?.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
             setPlayerReady(true);
             setMuted(event.target.isMuted());
             const initialVolume = event.target.getVolume?.();
@@ -196,7 +204,7 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
       if (player.current === instance) player.current = null;
       host.replaceChildren();
     };
-  }, [videoId, handOffCenterFeedback]);
+  }, [videoId, nativeYouTube, handOffCenterFeedback]);
 
   useEffect(() => {
     if (!playing) return;
@@ -267,22 +275,32 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
   const leaveFullscreen = () => {
     fullscreenRequest.current += 1;
     setLandscapeMode(false);
+    try { if (nativeFullscreen) (streamVideo.current as NativeFullscreenVideo | null)?.webkitExitFullscreen?.(); } catch { /* Native fullscreen may already have ended. */ }
     if (fullscreenElement()) void exitFullscreen();
     try { orientation()?.unlock(); } catch { /* No orientation lock to release. */ }
     wake();
   };
   const toggleFullscreen = async () => {
-    if (fullscreenElement() || landscapeMode) { leaveFullscreen(); return; }
+    if (fullscreenElement() || nativeFullscreen) { leaveFullscreen(); return; }
     if (!dialog.current || closing.current) return;
     const request = ++fullscreenRequest.current;
     const touchScreen = window.matchMedia("(pointer: coarse)").matches;
     setPanel(null);
+    setFullscreenError("");
     wake();
-    if (!fullscreenSupported) { setLandscapeMode(true); return; }
+    if (!fullscreenSupported) {
+      const video = streamVideo.current as NativeFullscreenVideo | null;
+      try {
+        // Call directly in the tap handler: iPhone requires a user gesture.
+        if (!video?.webkitEnterFullscreen) throw new Error("Native fullscreen unavailable");
+        video.webkitEnterFullscreen();
+      } catch { setFullscreenError("Use the full-screen button inside the video controls."); }
+      return;
+    }
     // The document contains the modal; a dialog cannot be a Fullscreen API target.
     try { await enterFullscreen(document.documentElement); }
     catch {
-      if (touchScreen && request === fullscreenRequest.current && !closing.current) setLandscapeMode(true);
+      if (request === fullscreenRequest.current && !closing.current) setFullscreenError("Full screen was unavailable. Tap the full-screen button again to retry.");
       return;
     }
     if (request !== fullscreenRequest.current || closing.current) { void exitFullscreen(); return; }
@@ -415,7 +433,7 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
   };
   const onKeyDown = (event: React.KeyboardEvent<HTMLDialogElement>) => {
     if ((event.target as HTMLElement).closest("[data-player-settings]")) return;
-    if (streamUrl || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (streamUrl || nativeYouTube || event.metaKey || event.ctrlKey || event.altKey) return;
     wake();
     if ((event.target as HTMLElement).closest("button, [role=slider], input, [role=menu]") && event.key !== "f" && event.key !== "m" && event.key !== "c") return;
     const key = event.key.toLowerCase();
@@ -427,7 +445,8 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
     else if (key === "c") openPanel("captions");
   };
 
-  const controlsOn = !streamUrl && !playerError;
+  const controlsOn = !streamUrl && !nativeYouTube && !playerError;
+  const customFullscreenAvailable = fullscreenSupported || Boolean(streamUrl && hlsManifestUrl && !streamFallback);
   const pictureFit = tilt.ambientEnabled ? 94 : 100;
   const minimumEmbed = videoId ? 200 : 0;
   const fade = `transition-opacity duration-300 motion-reduce:transition-none ${chromeVisible ? "opacity-100" : "opacity-0"}`;
@@ -435,7 +454,7 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
   const playerOptions = <div className="flex items-center gap-0 sm:gap-1">
           {controlsOn && <PlayerButton type="button" onClick={() => openPanel("captions")} disabled={!playerReady} aria-label="Subtitles and language" aria-haspopup="menu" aria-expanded={panel === "captions"} title="Subtitles (C)" className="grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-40"><CaptionsIcon /></PlayerButton>}
           <PlayerButton ref={settingsTrigger} type="button" onClick={() => openPanel("root")} aria-label="Player settings" aria-haspopup="menu" aria-expanded={panel !== null} title="Settings" className="grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><SettingsIcon /></PlayerButton>
-          <PlayerButton type="button" onClick={() => void toggleFullscreen()} aria-label={fullscreenActive ? "Exit full screen" : "Enter full screen"} title="Full screen (F)" className="grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-40">{fullscreenActive ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}</PlayerButton>
+          {customFullscreenAvailable && <PlayerButton type="button" onClick={() => void toggleFullscreen()} aria-label={fullscreenActive ? "Exit full screen" : "Enter full screen"} title="Full screen (F)" className="grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-40">{fullscreenActive ? <FullscreenExitIcon /> : <FullscreenEnterIcon />}</PlayerButton>}
         </div>;
 
   return <dialog ref={dialog} aria-label={`${seriesTitle} — Episode ${String(selection.episode).padStart(2, "0")}`} onKeyDown={onKeyDown} onPointerMove={() => { if (!streamUrl && performance.now() - lastWake.current > 300) { lastWake.current = performance.now(); wake(); } }} onCancel={event => { event.preventDefault(); if (panel !== null) closePanel(); else if (fullscreenActive) leaveFullscreen(); else dismiss.current(); }} className="fixed inset-0 m-0 h-dvh max-h-none w-screen max-w-none overflow-hidden border-0 bg-transparent p-0 text-white backdrop:bg-transparent">
@@ -446,17 +465,29 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
     </div>
     {(videoId || streamStarted) && <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[5] bg-black" />}
     <PlayerAmbient videoRef={streamVideo} motionRef={ambientMotion} enabled={tilt.ambientEnabled && Boolean(videoId || streamStarted)} playing={playing && !playerError} mode={tilt.effectiveAmbientMode} youtubeId={videoId} palette={tilt.ambientPalette} paletteKey={seriesTitle} sourceKey={hlsManifestUrl ?? streamUrl ?? videoId ?? ""} strength={tilt.ambientStrength} onUnavailable={() => setAmbientBlocked(true)} />
-    <div ref={tiltSurface} className={`absolute inset-0 z-10 bg-black ${videoId ? "pointer-events-none" : ""}`} style={videoId || streamUrl ? { inset: "auto", left: `calc(50% - min(${pictureFit / 2}cqw, ${videoAspect * pictureFit / 2}cqh))`, top: `calc(50% - min(${pictureFit / 2}cqh, max(${minimumEmbed / 2}px, ${pictureFit / 2 / videoAspect}cqw)))`, width: `min(${pictureFit}cqw, ${videoAspect * pictureFit}cqh)`, height: `min(${pictureFit}cqh, max(${minimumEmbed}px, ${pictureFit / videoAspect}cqw))` } : undefined}>
+    <div ref={tiltSurface} className={`absolute inset-0 z-10 bg-black ${videoId && !nativeYouTube ? "pointer-events-none" : ""}`} style={videoId || streamUrl ? { inset: "auto", left: `calc(50% - min(${pictureFit / 2}cqw, ${videoAspect * pictureFit / 2}cqh))`, top: `calc(50% - min(${pictureFit / 2}cqh, max(${minimumEmbed / 2}px, ${pictureFit / 2 / videoAspect}cqw)))`, width: `min(${pictureFit}cqw, ${videoAspect * pictureFit}cqh)`, height: `min(${pictureFit}cqh, max(${minimumEmbed}px, ${pictureFit / videoAspect}cqw))` } : undefined}>
       {videoId && <div className="absolute inset-0" style={{ filter: brightness === 100 ? undefined : `brightness(${brightness / 100})` }}><div ref={playerMount} className="absolute inset-0 [&_iframe]:size-full [&_iframe]:border-0" /></div>}
-      {streamUrl && streamStarted && <StreamVideo manifestUrl={hlsManifestUrl} fallbackUrl={streamUrl} title={seriesTitle} videoRef={streamVideo} onPlaying={setPlaying} onAspectRatio={setVideoAspect} onVideo={video => contentId ? attachVideoTelemetry(video, contentId, () => watch.current.accessToken) : undefined} onFallback={frame => {
+      {streamUrl && streamStarted && <StreamVideo manifestUrl={hlsManifestUrl} fallbackUrl={streamUrl} title={seriesTitle} videoRef={streamVideo} onPlaying={setPlaying} onAspectRatio={setVideoAspect} onVideo={video => {
+        const beginFullscreen = () => setNativeFullscreen(true);
+        const endFullscreen = () => { setNativeFullscreen(false); setLandscapeMode(false); };
+        video.addEventListener("webkitbeginfullscreen", beginFullscreen);
+        video.addEventListener("webkitendfullscreen", endFullscreen);
+        const stopTelemetry = contentId ? attachVideoTelemetry(video, contentId, () => watch.current.accessToken) : undefined;
+        return () => {
+          video.removeEventListener("webkitbeginfullscreen", beginFullscreen);
+          video.removeEventListener("webkitendfullscreen", endFullscreen);
+          try { if ((video as NativeFullscreenVideo).webkitDisplayingFullscreen) (video as NativeFullscreenVideo).webkitExitFullscreen?.(); } catch { /* The native player may already be dismissed. */ }
+          stopTelemetry?.();
+        };
+      }} onFallback={frame => {
         setStreamFallback(true);
         const stopPlayback = observeStreamPlayback(frame, setPlaying);
         const stopTelemetry = contentId ? attachStreamTelemetry(frame, contentId, () => watch.current.accessToken) : undefined;
         return () => { stopPlayback(); stopTelemetry?.(); };
       }} />}
     </div>
-    <div className={`absolute inset-0 z-20 ${streamUrl ? "pointer-events-none" : ""}`} onClick={event => {
-      if (streamUrl || event.target !== event.currentTarget) return;
+    <div className={`absolute inset-0 z-20 ${streamUrl || nativeYouTube ? "pointer-events-none" : ""}`} onClick={event => {
+      if (streamUrl || nativeYouTube || event.target !== event.currentTarget) return;
       backgroundTap((event.nativeEvent as PointerEvent).pointerType);
     }}>
       {controlsOn && <div aria-hidden="true" onPointerDown={brightnessDown} onPointerMove={brightnessMove} onPointerUp={brightnessUp} onPointerCancel={brightnessUp} className="absolute inset-y-24 left-0 w-[32%] touch-none" />}
@@ -466,12 +497,13 @@ export default function EpisodeExpansion({ selection, seriesTitle, videoId, stre
           <SunIcon className="absolute bottom-3 left-1/2 size-5 -translate-x-1/2 text-white mix-blend-difference" />
         </div></div>
       </div>}
-      <div inert={!chromeVisible && controlsOn} className={`${styles.header} pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 pt-[max(16px,var(--player-safe-top))] pr-[max(16px,var(--player-safe-right))] pl-[max(16px,var(--player-safe-left))] ${controlsOn ? "bg-gradient-to-b from-black/55 to-transparent pb-12" : ""} ${streamUrl ? "" : fade}`}>
+      <div inert={!chromeVisible && controlsOn} className={`${styles.header} pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 pt-[max(16px,var(--player-safe-top))] pr-[max(16px,var(--player-safe-right))] pl-[max(16px,var(--player-safe-left))] ${controlsOn ? "bg-gradient-to-b from-black/55 to-transparent pb-12" : ""} ${streamUrl || nativeYouTube ? "" : fade}`}>
         <PlayerButton type="button" autoFocus onClick={() => dismiss.current()} aria-label="Close video and return to episodes" title="Back to episodes" className="grid size-12 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
           <BackIcon />
         </PlayerButton>
-        {streamUrl && playerOptions}
+        {(streamUrl || nativeYouTube) && playerOptions}
       </div>
+      {fullscreenError && <p role="status" className="pointer-events-none absolute inset-x-6 top-24 rounded-xl bg-black/80 p-3 text-center text-sm text-white">{fullscreenError}</p>}
       {playerError && <p role="alert" className="absolute inset-x-6 top-[38%] text-center text-sm text-white">{playerError}</p>}
       {videoId && !playerReady && !playerError && <p role="status" className="absolute inset-x-6 top-[38%] text-center text-sm text-white">Loading video…</p>}
       {controlsOn && <div data-player-skip-controls inert={!chromeVisible} className={`pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 items-center justify-center gap-[clamp(80px,18vw,200px)] px-4 ${fade}`}>
